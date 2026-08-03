@@ -1,0 +1,473 @@
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+   Name = "Perugius Prop Kill",
+   Icon = 0,
+   LoadingTitle = "use this for prop kill",
+   LoadingSubtitle = "by Perugius",
+   ShowText = "Perugius",
+   Theme = "Default",
+   ToggleUIKeybind = "K",
+   DisableRayfieldPrompts = false,
+   DisableBuildWarnings = false,
+   ConfigurationSaving = {
+      Enabled = true,
+      FolderName = nil,
+      FileName = "Perugius Hub"
+   },
+   Discord = {
+      Enabled = false,
+      Invite = "noinvitelink",
+      RememberJoins = true
+   },
+   KeySystem = false,
+   KeySettings = {
+      Title = "Untitled",
+      Subtitle = "Key System",
+      Note = "No method of obtaining the key is provided",
+      FileName = "Key",
+      SaveKey = true,
+      GrabKeyFromSite = false,
+      Key = {"Hello"}
+   }
+})
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
+
+-- ==========================================
+-- PROPS TAB
+-- ==========================================
+local PropsTab = Window:CreateTab("Props", 4483362458)
+
+local selectedPlayer = nil
+local function GetPlayerList()
+    local t = {}
+    for _,plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer then
+            table.insert(t, plr.Name)
+        end
+    end
+    return t
+end
+
+local function UpdateTargetPlayer(playerName)
+    if playerName and playerName ~= "" then
+        selectedPlayer = Players:FindFirstChild(playerName)
+        getgenv().PropTarget = selectedPlayer
+    else
+        selectedPlayer = nil
+        getgenv().PropTarget = nil
+    end
+end
+
+PropsTab:CreateSection("Target Selection")
+
+local TargetDropdown = PropsTab:CreateDropdown({
+   Name = "Select Player",
+   Options = GetPlayerList(),
+   CurrentOption = {""},
+   MultipleOptions = false,
+   Flag = "PropTarget",
+   Callback = function(Options)
+      local value = Options[1] or ""
+      UpdateTargetPlayer(value)
+   end,
+})
+
+PropsTab:CreateButton({
+   Name = "Refresh Player List",
+   Callback = function()
+      TargetDropdown:Refresh(GetPlayerList())
+   end,
+})
+
+local function GetMyProps()
+    local props = {}
+    local workspaceCom = workspace:FindFirstChild("WorkspaceCom")
+    if not workspaceCom then return props end
+    local myName = LocalPlayer.Name
+    for _, folder in ipairs(workspaceCom:GetChildren()) do
+        for _, prop in ipairs(folder:GetChildren()) do
+            if prop.Name:find(myName) and prop:FindFirstChild("SetCurrentCFrame") then
+                table.insert(props, prop)
+            end
+        end
+    end
+    return props
+end
+
+local function TeleportProps(targetCFrame)
+    local props = GetMyProps()
+    for _, prop in ipairs(props) do
+        task.spawn(function()
+            pcall(function()
+                prop.SetCurrentCFrame:InvokeServer(targetCFrame)
+            end)
+        end)
+    end
+end
+
+local function ClearAllProps()
+    pcall(function()
+        ReplicatedStorage.RE:FindFirstChild("1Clea1rTool1s"):FireServer("ClearAllProps")
+    end)
+end
+
+local function GetTarget()
+    if not selectedPlayer then return nil end
+    if not selectedPlayer.Parent then 
+        selectedPlayer = nil
+        getgenv().PropTarget = nil
+        return nil
+    end
+    return selectedPlayer
+end
+
+local function AutoSpawnProp()
+    local RE = ReplicatedStorage:WaitForChild("RE")
+    local char = LocalPlayer.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+
+    local hasTool = char:FindFirstChild("PropMaker") or LocalPlayer.Backpack:FindFirstChild("PropMaker")
+
+    if not hasTool then
+        RE:WaitForChild("1Too1l"):InvokeServer("PickingTools", "PropMaker")
+        task.wait(1.5)
+    end
+
+    local tool = LocalPlayer.Backpack:FindFirstChild("PropMaker") or char:FindFirstChild("PropMaker")
+    if tool and tool.Parent == LocalPlayer.Backpack then
+        LocalPlayer.Character.Humanoid:EquipTool(tool)
+        task.wait(1.5)
+    end
+
+    local elapsed = 0
+    while not char:FindFirstChild("PropMaker") and elapsed < 5 do
+        task.wait(0.1)
+        elapsed += 0.1
+    end
+
+    if not char:FindFirstChild("PropMaker") then
+        warn("PropMaker não equipado!")
+        return
+    end
+
+    RE:WaitForChild("1Clea1rTool1s"):FireServer("RequestingPropName", "FurnitureChairBlackBig", "Furniture")
+    task.wait(1.5)
+
+    char.PropMaker:WaitForChild("Tool_PropMake"):FireServer(
+        workspace:WaitForChild("Model"):WaitForChild("Sidewalk"),
+        Vector3.new(-41.487369537353516, 0.40000009536743164, -28.790424346923828)
+    )
+    task.wait(1)
+end
+
+PropsTab:CreateSection("Prop Actions")
+
+local FlingConnection = nil
+local BringConnection = nil
+local KillConnection = nil
+local RGBConnection = nil
+local OrbitConnection = nil
+local RGBEnabled = false
+
+-- Debounce timer to prevent task.delay spam crashing the client
+local lastClearTime = 0 
+
+PropsTab:CreateToggle({
+   Name = "Prop Fling",
+   CurrentValue = false,
+   Flag = "PropFling",
+   Callback = function(Value)
+        if FlingConnection then
+            FlingConnection:Disconnect()
+            FlingConnection = nil
+        end
+
+        if not Value then return end
+
+        AutoSpawnProp()
+
+        FlingConnection = RunService.Heartbeat:Connect(function()
+            local target = GetTarget()
+            if not target or not target.Character then return end
+            local targetRoot = target.Character:FindFirstChild("HumanoidRootPart")
+            local targetHumanoid = target.Character:FindFirstChild("Humanoid")
+            if not targetRoot or not targetHumanoid then return end
+            
+            if targetHumanoid.Sit then
+                if tick() - lastClearTime > 2 then
+                    TeleportProps(CFrame.new(1082537, 81322368, -4719626.5))
+                    task.delay(1.5, ClearAllProps)
+                    lastClearTime = tick()
+                end
+            else
+                TeleportProps(
+                    targetRoot.CFrame * CFrame.new(0, -(targetHumanoid.HipHeight + 2), 0)
+                )
+            end
+        end)
+   end,
+})
+
+PropsTab:CreateToggle({
+   Name = "Prop Bring",
+   CurrentValue = false,
+   Flag = "PropBring",
+   Callback = function(Value)
+        if BringConnection then
+            BringConnection:Disconnect()
+            BringConnection = nil
+        end
+
+        if not Value then return end
+
+        AutoSpawnProp()
+
+        BringConnection = RunService.Heartbeat:Connect(function()
+            local target = GetTarget()
+            if not target or not target.Character then return end
+            local targetRoot = target.Character:FindFirstChild("HumanoidRootPart")
+            local targetHumanoid = target.Character:FindFirstChild("Humanoid")
+            local myChar = LocalPlayer.Character
+            if not targetRoot or not targetHumanoid then return end
+            if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return end
+            
+            if targetHumanoid.Sit then
+                if tick() - lastClearTime > 2 then
+                    TeleportProps(
+                        myChar.HumanoidRootPart.CFrame * CFrame.new(0, 0, -3)
+                    )
+                    task.delay(1.5, ClearAllProps)
+                    lastClearTime = tick()
+                end
+            else
+                TeleportProps(
+                    targetRoot.CFrame * CFrame.new(0, -(targetHumanoid.HipHeight + 2), 0)
+                )
+            end
+        end)
+   end,
+})
+
+PropsTab:CreateToggle({
+   Name = "Prop Kill",
+   CurrentValue = false,
+   Flag = "PropKill",
+   Callback = function(Value)
+        if KillConnection then
+            KillConnection:Disconnect()
+            KillConnection = nil
+        end
+
+        if not Value then return end
+
+        AutoSpawnProp()
+
+        KillConnection = RunService.Heartbeat:Connect(function()
+            local target = GetTarget()
+            if not target or not target.Character then return end
+            local targetRoot = target.Character:FindFirstChild("HumanoidRootPart")
+            local targetHumanoid = target.Character:FindFirstChild("Humanoid")
+            if not targetRoot or not targetHumanoid then return end
+            
+            if targetHumanoid.Sit then
+                if tick() - lastClearTime > 2 then
+                    TeleportProps(CFrame.new(216.457, -1338.86, -477.942))
+                    task.delay(1.5, ClearAllProps)
+                    lastClearTime = tick()
+                end
+            else
+                TeleportProps(
+                    targetRoot.CFrame * CFrame.new(0, -(targetHumanoid.HipHeight + 2), 0)
+                )
+            end
+        end)
+   end,
+})
+
+PropsTab:CreateToggle({
+   Name = "Prop RGB",
+   CurrentValue = false,
+   Flag = "PropRGB",
+   Callback = function(Value)
+        RGBEnabled = Value
+        if RGBConnection then
+            RGBConnection:Disconnect()
+            RGBConnection = nil
+        end
+        if not RGBEnabled then return end
+        RGBConnection = RunService.Heartbeat:Connect(function()
+            if not RGBEnabled then return end
+            local hue = (tick() * 0.5) % 1
+            local color = Color3.fromHSV(hue, 1, 1)
+            local props = GetMyProps()
+            for _, prop in ipairs(props) do
+                if prop and prop.Parent and prop:FindFirstChild("ChangePropColor") then
+                    pcall(function()
+                        prop.ChangePropColor:InvokeServer(color)
+                    end)
+                end
+            end
+            pcall(function()
+                LocalPlayer.PlayerGui
+                    :WaitForChild("NoResetGUIHandler")
+                    :WaitForChild("PropColorPicker")
+                    :WaitForChild("SetColor")
+                    :FireServer(color)
+            end)
+        end)
+   end,
+})
+
+PropsTab:CreateToggle({
+   Name = "Orbit Prop",
+   CurrentValue = false,
+   Flag = "OrbitProp",
+   Callback = function(Value)
+        if OrbitConnection then
+            OrbitConnection:Disconnect()
+            OrbitConnection = nil
+        end
+        if not Value then return end
+        local speed = 2
+        local radius = 6
+        local heightOffset = -3
+        local angle = 0
+        OrbitConnection = RunService.Heartbeat:Connect(function(delta)
+            local char = LocalPlayer.Character
+            if not char then return end
+            local root = char:FindFirstChild("HumanoidRootPart")
+            if not root then return end
+            local props = GetMyProps()
+            if not props or #props == 0 then return end
+            angle += delta * speed
+            local spacing = (math.pi * 2) / #props
+            for i, prop in ipairs(props) do
+                if not prop or not prop.Parent then continue end
+                local currentAngle = angle + (i * spacing)
+                local x = math.cos(currentAngle) * radius
+                local z = math.sin(currentAngle) * radius
+                local worldPos = root.Position + Vector3.new(x, heightOffset, z)
+                local lookAt = CFrame.lookAt(worldPos, root.Position)
+                local remote = prop:FindFirstChild("SetCurrentCFrame")
+                if remote then
+                    pcall(function()
+                        remote:InvokeServer(lookAt)
+                    end)
+                end
+            end
+        end)
+   end,
+})
+
+-- ==========================================
+-- ANTI TOOLS TAB
+-- ==========================================
+local AntiToolsTab = Window:CreateTab("Anti Tools", 4483362458)
+
+local loopAtivo = false
+local loopTodosAtivo = false
+local antiToolsSelectedPlayer = nil
+
+AntiToolsTab:CreateSection("Target Selection")
+
+local AntiToolsDropdown = AntiToolsTab:CreateDropdown({
+   Name = "Select Player",
+   Options = GetPlayerList(),
+   CurrentOption = {""},
+   MultipleOptions = false,
+   Flag = "AntiTarget",
+   Callback = function(Options)
+      antiToolsSelectedPlayer = Options[1] or ""
+      getgenv().AntiTarget = antiToolsSelectedPlayer
+   end,
+})
+
+AntiToolsTab:CreateButton({
+   Name = "Refresh Players",
+   Callback = function()
+      local newPlayers = GetPlayerList()
+      AntiToolsDropdown:Refresh(newPlayers)
+      if antiToolsSelectedPlayer and not Players:FindFirstChild(antiToolsSelectedPlayer) then
+         antiToolsSelectedPlayer = nil
+         getgenv().AntiTarget = nil
+      end
+   end,
+})
+
+AntiToolsTab:CreateSection("Anti Tools")
+
+AntiToolsTab:CreateToggle({
+   Name = "Anti Tools (Single)",
+   CurrentValue = false,
+   Flag = "AntiSingle",
+   Callback = function(Value)
+      loopAtivo = Value
+      if Value then
+        local targetName = getgenv().AntiTarget or antiToolsSelectedPlayer
+        if not targetName or targetName == "" then 
+           warn("Nenhum alvo selecionado!")
+           loopAtivo = false
+           return 
+        end
+        
+        task.spawn(function()
+           while loopAtivo do
+              pcall(function()
+                local alvo = Players:FindFirstChild(targetName)
+                if alvo and alvo.Character then
+                    local tool = alvo.Character:FindFirstChildOfClass("Tool")
+                    if tool then
+                       local triggerRemote = ReplicatedStorage.RE:FindFirstChild("1Playe1rTrigge1rEven1t")
+                       local clearRemote = ReplicatedStorage.RE:FindFirstChild("1Clea1rTool1s")
+                       if triggerRemote and clearRemote then
+                          triggerRemote:FireServer("AcceptedToolToServer", tool.Name, alvo)
+                          clearRemote:FireServer("ClearAllTools")
+                       end
+                    end
+                end
+              end)
+              task.wait(0.1) -- Slightly raised from 0.01 to prevent server crashing/yielding
+           end
+        end)
+      end
+   end,
+})
+
+AntiToolsTab:CreateToggle({
+   Name = "Anti Tools (All)",
+   CurrentValue = false,
+   Flag = "AntiAll",
+   Callback = function(Value)
+      loopTodosAtivo = Value
+      if Value then
+        task.spawn(function()
+           while loopTodosAtivo do
+              pcall(function()
+                for _, alvo in ipairs(Players:GetPlayers()) do
+                   if alvo.Name ~= LocalPlayer.Name and alvo.Character then
+                      local tool = alvo.Character:FindFirstChildOfClass("Tool")
+                      if tool then
+                         local triggerRemote = ReplicatedStorage.RE:FindFirstChild("1Playe1rTrigge1rEven1t")
+                         local clearRemote = ReplicatedStorage.RE:FindFirstChild("1Clea1rTool1s")
+                         if triggerRemote and clearRemote then
+                            triggerRemote:FireServer("AcceptedToolToServer", tool.Name, alvo)
+                            clearRemote:FireServer("ClearAllTools")
+                         end
+                      end
+                   end
+                end
+              end)
+              task.wait(0.1) -- Slightly raised from 0.01 to prevent server crashing/yielding
+           end
+        end)
+      end
+   end,
+})
+
+print("Perugius Prop Kill loaded!")
