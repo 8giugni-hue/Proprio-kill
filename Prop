@@ -1,0 +1,414 @@
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+   Name = "Perugius Hub",
+   Icon = 0,
+   LoadingTitle = "Perugius Hub",
+   LoadingSubtitle = "",
+   ShowText = "Perugius",
+   Theme = "Default",
+   ToggleUIKeybind = "K",
+   DisableRayfieldPrompts = false,
+   DisableBuildWarnings = false,
+   ConfigurationSaving = {
+      Enabled = true,
+      FolderName = nil,
+      FileName = "Perugius Hub"
+   },
+   Discord = {
+      Enabled = false,
+      Invite = "noinvitelink",
+      RememberJoins = true
+   },
+   KeySystem = false,
+   KeySettings = {
+      Title = "Untitled",
+      Subtitle = "Key System",
+      Note = "",
+      FileName = "Key",
+      SaveKey = true,
+      GrabKeyFromSite = false,
+      Key = {"Hello"}
+   }
+})
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
+
+getgenv().PropTarget = nil
+getgenv().PropMode = "Kill" 
+getgenv().AntiTarget = nil
+
+local isSpawning = false
+local propReady = false
+
+local function GetPlayerList()
+    local t = {}
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer then table.insert(t, plr.Name) end
+    end
+    return t
+end
+
+local function GetMyProps()
+    local props = {}
+    local workspaceCom = workspace:FindFirstChild("WorkspaceCom")
+    if not workspaceCom then return props end
+    local myName = LocalPlayer.Name
+    for _, folder in ipairs(workspaceCom:GetChildren()) do
+        for _, prop in ipairs(folder:GetChildren()) do
+            if prop.Name:find(myName) and prop:FindFirstChild("SetCurrentCFrame") then
+                table.insert(props, prop)
+            end
+        end
+    end
+    return props
+end
+
+local function TeleportProps(targetCFrame)
+    for _, prop in ipairs(GetMyProps()) do
+        task.spawn(function()
+            pcall(function()
+                prop.SetCurrentCFrame:InvokeServer(targetCFrame)
+            end)
+        end)
+    end
+end
+
+local function ClearAllProps()
+    pcall(function()
+        ReplicatedStorage.RE:FindFirstChild("1Clea1rTool1s"):FireServer("ClearAllProps")
+    end)
+end
+
+local function AutoSpawnProp()
+    if isSpawning then return end
+    if #GetMyProps() > 0 then 
+        propReady = true
+        return 
+    end
+
+    isSpawning = true
+    propReady = false
+
+    local RE = ReplicatedStorage:WaitForChild("RE", 5)
+    local char = LocalPlayer.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then 
+        isSpawning = false 
+        return 
+    end
+    local root = char.HumanoidRootPart
+
+    pcall(function()
+        RE:FindFirstChild("1Clea1rTool1s"):FireServer("ClearAllProps")
+    end)
+    task.wait(0.3)
+
+    local hasTool = char:FindFirstChild("PropMaker") or LocalPlayer.Backpack:FindFirstChild("PropMaker")
+    if not hasTool then
+        pcall(function()
+            RE:WaitForChild("1Too1l"):InvokeServer("PickingTools", "PropMaker")
+        end)
+        task.wait(1)
+    end
+
+    local tool = LocalPlayer.Backpack:FindFirstChild("PropMaker") or char:FindFirstChild("PropMaker")
+    if tool and tool.Parent == LocalPlayer.Backpack then
+        pcall(function() char:FindFirstChild("Humanoid"):EquipTool(tool) end)
+        task.wait(1)
+    end
+
+    if not char:FindFirstChild("PropMaker") then
+        isSpawning = false
+        return
+    end
+
+    pcall(function()
+        RE:WaitForChild("1Clea1rTool1s"):FireServer("RequestingPropName", "FurnitureChairBlackBig", "Furniture")
+    end)
+    task.wait(1)
+
+    local spawnTarget = workspace:FindFirstChild("Baseplate") or workspace:FindFirstChildWhichIsA("Terrain")
+    if not spawnTarget then
+        local model = workspace:FindFirstChild("Model")
+        if model then spawnTarget = model:FindFirstChild("Sidewalk") end
+    end
+    
+    if spawnTarget then
+        pcall(function()
+            char.PropMaker:WaitForChild("Tool_PropMake"):FireServer(
+                spawnTarget,
+                root.Position - Vector3.new(0, 5, 0)
+            )
+        end)
+    end
+    
+    task.wait(0.5)
+
+    isSpawning = false
+    propReady = true
+end
+
+local PropsTab = Window:CreateTab("props", 4483362458)
+
+PropsTab:CreateSection("player")
+
+local TargetDropdown = PropsTab:CreateDropdown({
+   Name = "Player",
+   Options = GetPlayerList(),
+   CurrentOption = {""},
+   MultipleOptions = false,
+   Flag = "PropTarget",
+   Callback = function(Options)
+      local value = Options[1] or ""
+      getgenv().PropTarget = (value ~= "" and Players:FindFirstChild(value)) or nil
+   end,
+})
+
+PropsTab:CreateButton({
+   Name = "refresh",
+   Callback = function() TargetDropdown:Refresh(GetPlayerList()) end,
+})
+
+PropsTab:CreateSection("Actions")
+
+PropsTab:CreateDropdown({
+   Name = "method",
+   Options = {"Fling", "Bring", "Kill"},
+   CurrentOption = {"Kill"},
+   MultipleOptions = false,
+   Flag = "PropModeSelector",
+   Callback = function(Options)
+      getgenv().PropMode = Options[1] or "Kill"
+   end,
+})
+
+local PropLoopRunning = false
+PropsTab:CreateToggle({
+   Name = "Start",
+   CurrentValue = false,
+   Flag = "prop",
+   Callback = function(Value)
+      PropLoopRunning = Value
+      if Value then
+          task.spawn(AutoSpawnProp)
+          
+          task.spawn(function()
+              while PropLoopRunning do
+                  if not propReady and not isSpawning and #GetMyProps() == 0 then
+                      task.spawn(AutoSpawnProp)
+                  end
+
+                  if propReady and #GetMyProps() > 0 then
+                      local target = getgenv().PropTarget
+                      local mode = getgenv().PropMode
+                      
+                      if target and target.Parent and target.Character then
+                          local targetRoot = target.Character:FindFirstChild("HumanoidRootPart")
+                          local targetHum = target.Character:FindFirstChild("Humanoid")
+                          local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                          
+                          if targetRoot and targetHum and targetHum.Health > 0 then
+                              
+                              if mode == "Kill" then
+                                  if not targetHum.Sit then
+                                      TeleportProps(targetRoot.CFrame * CFrame.new(0, -(targetHum.HipHeight + 1), 0))
+                                  else
+                                      TeleportProps(CFrame.new(216.457, -1338.86, -477.942))
+                                      ClearAllProps()
+                                      propReady = false
+                                      task.spawn(AutoSpawnProp)
+                                      task.wait(0.15)
+                                  end
+                                  
+                              elseif mode == "Fling" then
+                                  if not targetHum.Sit then
+                                      TeleportProps(targetRoot.CFrame * CFrame.new(0, -(targetHum.HipHeight + 1), 0))
+                                  else
+                                      for i = 1, 5 do
+                                          TeleportProps(CFrame.new(math.random(100000, 999999), math.random(100000, 999999), math.random(100000, 999999)))
+                                          task.wait(0.01)
+                                      end
+                                      ClearAllProps()
+                                      propReady = false
+                                      task.spawn(AutoSpawnProp)
+                                      task.wait(0.3)
+                                  end
+                                  
+                              elseif mode == "Bring" and myRoot then
+                                  if not targetHum.Sit then
+                                      TeleportProps(targetRoot.CFrame * CFrame.new(0, -(targetHum.HipHeight + 1), 0))
+                                  else
+                                      for i = 1, 10 do
+                                          TeleportProps(myRoot.CFrame * CFrame.new(0, 0, -3))
+                                          task.wait(0.03)
+                                      end
+                                      ClearAllProps()
+                                      propReady = false
+                                      task.spawn(AutoSpawnProp)
+                                      task.wait(0.3)
+                                  end
+                              end
+                          end
+                      end
+                  end
+                  task.wait(0.05)
+              end
+          end)
+      else
+          propReady = false
+      end
+   end,
+})
+
+PropsTab:CreateButton({
+   Name = "remove props",
+   Callback = function()
+       ClearAllProps()
+       propReady = false
+   end,
+})
+
+PropsTab:CreateSection("Visuals")
+
+local RGBRunning = false
+PropsTab:CreateToggle({
+   Name = "RGB",
+   CurrentValue = false,
+   Flag = "PropRGB",
+   Callback = function(Value)
+      RGBRunning = Value
+      if not Value then return end
+      task.spawn(function()
+          while RGBRunning do
+              local hue = (tick() * 0.5) % 1
+              local color = Color3.fromHSV(hue, 1, 1)
+              for _, prop in ipairs(GetMyProps()) do
+                  pcall(function() prop.ChangePropColor:InvokeServer(color) end)
+              end
+              pcall(function()
+                  LocalPlayer.PlayerGui:WaitForChild("NoResetGUIHandler")
+                      :WaitForChild("PropColorPicker")
+                      :WaitForChild("SetColor"):FireServer(color)
+              end)
+              task.wait(0.1)
+          end
+      end)
+   end,
+})
+
+local OrbitRunning = false
+PropsTab:CreateToggle({
+   Name = "orbit",
+   CurrentValue = false,
+   Flag = "OrbitProp",
+   Callback = function(Value)
+      OrbitRunning = Value
+      if not Value then return end
+      local speed, radius, heightOffset, angle = 3, 6, -3, 0
+      task.spawn(function()
+          while OrbitRunning do
+              local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+              local props = GetMyProps()
+              if root and #props > 0 then
+                  angle += 0.05 * speed
+                  local spacing = (math.pi * 2) / #props
+                  for i, prop in ipairs(props) do
+                      if prop and prop.Parent then
+                          local currentAngle = angle + (i * spacing)
+                          local worldPos = root.Position + Vector3.new(math.cos(currentAngle) * radius, heightOffset, math.sin(currentAngle) * radius)
+                          pcall(function()
+                              prop.SetCurrentCFrame:InvokeServer(CFrame.lookAt(worldPos, root.Position))
+                          end)
+                      end
+                  end
+              end
+              task.wait(0.03)
+          end
+      end)
+   end,
+})
+
+local AntiToolsTab = Window:CreateTab("anti tools", 4483362458)
+
+AntiToolsTab:CreateSection("Target")
+
+local AntiToolsDropdown = AntiToolsTab:CreateDropdown({
+   Name = "Player",
+   Options = GetPlayerList(),
+   CurrentOption = {""},
+   MultipleOptions = false,
+   Flag = "AntiTargetDropdown",
+   Callback = function(Options)
+      getgenv().AntiTarget = Options[1] or ""
+   end,
+})
+
+AntiToolsTab:CreateButton({
+   Name = "Refresh",
+   Callback = function()
+      AntiToolsDropdown:Refresh(GetPlayerList())
+      if getgenv().AntiTarget and not Players:FindFirstChild(getgenv().AntiTarget) then
+          getgenv().AntiTarget = nil
+      end
+   end,
+})
+
+AntiToolsTab:CreateSection("Actions")
+
+local AntiSingleRunning = false
+AntiToolsTab:CreateToggle({
+   Name = "singlw",
+   CurrentValue = false,
+   Flag = "AntiSingle",
+   Callback = function(Value)
+      AntiSingleRunning = Value
+      if not Value then return end
+      task.spawn(function()
+          while AntiSingleRunning do
+              local targetName = getgenv().AntiTarget
+              if targetName and targetName ~= "" then
+                  local alvo = Players:FindFirstChild(targetName)
+                  if alvo and alvo.Character then
+                      local tool = alvo.Character:FindFirstChildOfClass("Tool")
+                      if tool then
+                          pcall(function()
+                              ReplicatedStorage.RE:FindFirstChild("1Playe1rTrigge1rEven1t"):FireServer("AcceptedToolToServer", tool.Name, alvo)
+                              ReplicatedStorage.RE:FindFirstChild("1Clea1rTool1s"):FireServer("ClearAllTools")
+                          end)
+                      end
+                  end
+              end
+              task.wait(0.05)
+          end
+      end)
+   end,
+})
+
+local AntiAllRunning = false
+AntiToolsTab:CreateToggle({
+   Name = "Anti",
+   CurrentValue = false,
+   Flag = "AntiAll",
+   Callback = function(Value)
+      AntiAllRunning = Value
+      if not Value then return end
+      task.spawn(function()
+          while AntiAllRunning do
+              for _, alvo in ipairs(Players:GetPlayers()) do
+                  if alvo.Name ~= LocalPlayer.Name and alvo.Character then
+                      local tool = alvo.Character:FindFirstChildOfClass("Tool")
+                      if tool then
+                          pcall(function()
+                              ReplicatedStorage.RE:FindFirstChild("1Playe1rTrigge1rEven1t"):FireServer("AcceptedToolToServer", tool.Name, alvo)
+                              ReplicatedStorage.RE:FindFirstChild("1Clea1rTool1s"):FireServer("ClearAllTools")
+                          end)
+                      end
+                  end
+              end
+              task.wait(0.1)
+          end
+      end)
+   end,
+})
